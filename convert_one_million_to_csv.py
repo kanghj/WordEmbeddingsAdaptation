@@ -106,9 +106,11 @@ def construct_sense_to_index():
 
 construct_sense_to_index()
 
+# penntreebank tags, used by default in nltk pos_tags
 POS_TAGS = ['PRP$', 'VBG', 'FW', 'VBN', 'POS', "''", 'VBP', 'WDT', 'JJ', 'WP', 'VBZ', 'DT', '#', 'RP', '$', 'NN', ')', '(',\
             'VBD', ',', '.', 'TO', 'PRP', 'RB', ':', 'NNS', 'NNP', '``', 'WRB', 'CC', 'LS', 'PDT', 'RBS', 'RBR', 'CD', 'EX',\
             'IN', 'WP$', 'MD', 'NNPS', 'JJS', 'JJR', 'SYM', 'VB', 'UH']
+
 
 class Instance(object):
     number = -1
@@ -197,10 +199,17 @@ class Instance(object):
 
 
 def get_instances(xml_file, key_file):
+    def should_be_omitted(num_instances):
+        return num_instances < 10
+
+
     tree = ET.parse(xml_file)
     xml_instances = tree.getroot().findall('.//instance')
 
     ids     = map(lambda x: x.attrib['id'], xml_instances)
+    if should_be_omitted(len(ids)):
+        return []
+
     heads   = map(lambda x: x.find('context').text or '', xml_instances)
     # the part of the context behind the <head> doesn't get included in head
     # so we use the tail of the head to obtain it
@@ -234,6 +243,7 @@ def get_instances(xml_file, key_file):
 
     return csv_instances
 
+
 def write_csv_for_directory(directory):
     try:
         with open('./' + directory.split('/')[-1] + '.csv', 'wb+' )  as output_file:
@@ -258,6 +268,7 @@ def write_csv_for_directory(directory):
         logging.exception(e)
         raise e
 
+
 def write_csv_for_files_in_directory(directory):
     try:
         xml_files = glob.glob(directory + '/*.xml')
@@ -269,14 +280,14 @@ def write_csv_for_files_in_directory(directory):
             
             file_name = xml_file.split('\\')[-1].split('/')[-1].split('.')[0]  # split on both \ and / in case of os differences
                                                                                 # i run on both linux and windows
-            
-            with open('./testfiles/' + file_name + '.csv', 'wb+')  as output_file:
-                writer = csv.writer(output_file)
-                instances = get_instances(xml_file, key_file)
+            instances = get_instances(xml_file, key_file)
+            if instances:
+                with open('./testfiles/' + file_name + '.csv', 'wb+')  as output_file:
+                    writer = csv.writer(output_file)
                 
-                for instance in instances:
-                    writer.writerows([instance.get_context_list() + instance.get_pos_tags_list()])
-                    writer.writerows([[SENSE_TO_INDEX[ get_root_word(instance.label)][instance.label] ]])
+                    for instance in instances:
+                        writer.writerows([instance.get_context_list() + instance.get_pos_tags_list()])
+                        writer.writerows([[SENSE_TO_INDEX[ get_root_word(instance.label)][instance.label] ]])
 
         print 'completed', directory
     except Exception as e:
