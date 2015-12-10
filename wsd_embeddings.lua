@@ -1,12 +1,12 @@
 require 'torch'
 require 'nn'
-
+require 'paths'
 
 -- embeddings from senna (c&w)
--- 1 for before target word
--- 1 for after target word
+-- 1 for the context's word embeddings
+-- 1 for pos tags
 ltw = nn.LookupTable(130000, 50)
-ltw2 = nn.LookupTable(130000, 50)
+ltw2 = nn.LookupTable(46, 46)
 
 -- initialize lookup table with embeddings
 embeddingsFile = torch.DiskFile('embeddings.txt');
@@ -20,61 +20,89 @@ for i=1, 130000 do
       emb[j] = embedding[j]
    end
    ltw.weight[i] = emb;
-   ltw2.weight[i] = emb;
 end
 
-n_classes = 40
-
---pt = nn.ParallelTable()
---pt:add(ltw)
-
---- todo: add capitalization feature
-mlp = nn.Sequential()
---mlp:add(pt)
-mlp:add(ltw)
-
--- the NN layers
-dropout = nn.Dropout(0.5)
-reshape = nn.Reshape(500)
-linear = nn.Linear(500, n_classes)
-lsm = nn.LogSoftMax()
-
-mlp:add(dropout)
-mlp:add(reshape)
-mlp:add(linear)
-mlp:add(lsm)
 
 trainSize = 5
 testSize = 5
+
 -- create training data set
-inputFile = torch.DiskFile('wsd_training.txt', 'r')
-inputLine = torch.LongStorage(10)
+for f in paths.files("./testtxt/testfiles/") do
 
-dataset = {}
-function dataset:size() return trainSize end
+   -- print p to see got wad
+   if not paths.dirp("./testtxt/testfiles/" .. f) then
 
-for i=1,dataset:size()  do 
-   inputFile:readLong(inputLine)
-   local input = torch.Tensor(10)
-   for j=1,10 do 
-      input[j] = inputLine[j]
+      inputFile = torch.DiskFile("testtxt/testfiles/" .. f, 'r')
+      inputLine = torch.LongStorage(20)
+
+      -- init new model
+      n_classes = inputFile:readInt()
+
+      pt = nn.ParallelTable()
+      pt:add(ltw)
+      pt:add(ltw2)
+
+      --- todo: add capitalization feature
+      mlp = nn.Sequential()
+      mlp:add(pt)
+      --mlp:add(ltw)
+
+      -- the NN layers
+      jt = nn.JoinTable(2)
+      bef_dropout_reshape = nn.Reshape(960)
+      dropout = nn.Dropout(0.5)
+      reshape = nn.Reshape(960)
+      linear = nn.Linear(960, n_classes)
+      lsm = nn.LogSoftMax()
+
+      mlp:add(jt)
+      mlp:add(bef_dropout_reshape)
+      mlp:add(dropout)
+      mlp:add(reshape)
+      mlp:add(linear)
+      mlp:add(lsm)
+      dataset = {}
+
+      function dataset:size() return trainSize end
+      trainSize = 0
+      while true  do
+	 inputFile:readLong(inputLine)
+	 trainSize = trainSize + 1
+	 local input = torch.Tensor(20)
+	 for j=1,10 do 
+	    input[j] = inputLine[j]
+	 end
+	 for j=11,20 do 
+	    input[j] = inputLine[j] + 1
+	 end
+
+	 local label = inputFile:readInt()
+	 local newInput = nn.SplitTable(1):forward(nn.Reshape(2,10):forward(input))
+
+	 local labelTensor = torch.Tensor(1)
+	 labelTensor[1] = label
+	 dataset[i] = {newInput, labelTensor}
+      end
+
+      inputFile:close()
+
+      criterion = nn.ClassNLLCriterion()
+      trainer = nn.StochasticGradient(mlp, criterion)
+      trainer.learningRate = 0.01
+      trainer:train(dataset)
+      
+      print('done with ' .. f)
+
    end
-
-   local label = inputFile:readInt()
-   inputTensor = torch.Tensor(input)
-   labelTensor = torch.Tensor(1)
-   labelTensor[1] = label
-   dataset[i] = {inputTensor, labelTensor}
-   print(label)
 end
 
-
-inputFile:close()
-
-criterion = nn.ClassNLLCriterion()
-trainer = nn.StochasticGradient(mlp, criterion)
-trainer.learningRate = 0.01
-trainer:train(dataset)
+local outputEmbeddingsFile = torch.DiskFile('new_embeddings.txt', 'w')
+for i=1, (#ltw.weight)[1] do
+--   for j=1, (#ltw.weight)[0] do
+      outputEmbeddingsFile:writeDouble(ltw.weight[i])
+        	
+--   end    
+end
 
 
 -- Testing
@@ -102,8 +130,8 @@ for i=1,testSize do
    for k=1, output:size()[1] do
       --print(k .. ', '  .. output[k])
       if output[k] > outputValue then
-	 outputLabel = k;
-	 outputValue = output[k];
+	     outputLabel = k;
+	     outputValue = output[k];
       end
    end
 
