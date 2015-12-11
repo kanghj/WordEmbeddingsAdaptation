@@ -7,8 +7,7 @@ import logging
 
 import nltk
 
-from collections import Counter
-from multiprocessing import Pool
+import multiprocessing
 from itertools import izip
 
 """
@@ -16,6 +15,14 @@ This python program converts the one million sense tagged wordnet dataset into c
 This ran on windows. The present program creates a .csv file for every target word. It's possible
 to make a csv file for the entire word pos type (adj, adv, noun, verb) by replacing instances of 
 write_csv_for_files_in_directory to write_csv_for_directory. 
+
+(for a csvfile for each target word) Although we are writing a csv file, we don't use any csv headers. 
+The first row is number of senses/classes 
+for the target word. 
+
+After this, run drop_commas.py. Loading csv files in torch is a pain as of this current date, 
+although there is progress getting made by torch in loading csv (the csvigo library), so in future, 
+drop_commas may not be required.
 
 """
 
@@ -36,6 +43,13 @@ WORD_TO_INDEX = {}
 # map from root word to possible sense id to number
 SENSE_TO_INDEX = {}
 
+# penntreebank tags, used by default in nltk pos_tags
+# a special 'padding' tag is used for PADDING
+POS_TAGS = ['PRP$', 'VBG', 'FW', 'VBN', 'POS', "''", 'VBP', 'WDT', 'JJ', 'WP', 'VBZ', 'DT', '#', 'RP', '$', 'NN', ')', '(',\
+            'VBD', ',', '.', 'TO', 'PRP', 'RB', ':', 'NNS', 'NNP', '``', 'WRB', 'CC', 'LS', 'PDT', 'RBS', 'RBR', 'CD', 'EX',\
+            'IN', 'WP$', 'MD', 'NNPS', 'JJS', 'JJR', 'SYM', 'VB', 'UH'] + ['PADDING']
+
+
 def construct_word_to_index(wordlst_file):
     for i, word in enumerate(wordlst_file):
         WORD_TO_INDEX[word.strip()] = i + 1 # + 1 to be 1-indexed, this is convenient for later use 
@@ -48,7 +62,7 @@ with open(config['wordlst']) as wordlst_file:
 def get_root_word(senseid):
     return senseid.split('%')[0]
 
-def construct_sense_to_index():
+def construct_or_recover_sense_to_index():
     
     def construct_sense_to_index_from_keyfile(opened_file):
         for line in opened_file:
@@ -67,7 +81,7 @@ def construct_sense_to_index():
             except KeyError:
                 senses[senseid] = len(senses) + 1
 
-    def construct_sense_to_index_from_existing_map(opened_file):
+    def recover_sense_to_index(opened_file):
         for line in opened_file:
             root_word = get_root_word(line.split()[0])
             senseid = line.split()[0]
@@ -88,7 +102,7 @@ def construct_sense_to_index():
     print "gathering SENSE_TO_INDEX mapping"
     if os.path.isfile('./senseid_to_index') and os.path.getsize('./senseid_to_index') > 0:
         key_file = open('./senseid_to_index', 'r')
-        construct_sense_to_index_from_existing_map(key_file)
+        recover_sense_to_index(key_file)
         key_file.close()
     else:
         for directory in config['directories_for_testing']:
@@ -104,13 +118,7 @@ def construct_sense_to_index():
         save_sense_to_index_to_file(saved_file)
         saved_file.close()
 
-construct_sense_to_index()
-
-# penntreebank tags, used by default in nltk pos_tags
-POS_TAGS = ['PRP$', 'VBG', 'FW', 'VBN', 'POS', "''", 'VBP', 'WDT', 'JJ', 'WP', 'VBZ', 'DT', '#', 'RP', '$', 'NN', ')', '(',\
-            'VBD', ',', '.', 'TO', 'PRP', 'RB', ':', 'NNS', 'NNP', '``', 'WRB', 'CC', 'LS', 'PDT', 'RBS', 'RBR', 'CD', 'EX',\
-            'IN', 'WP$', 'MD', 'NNPS', 'JJS', 'JJR', 'SYM', 'VB', 'UH']
-
+construct_or_recover_sense_to_index()
 
 class Instance(object):
     number = -1
@@ -136,8 +144,17 @@ class Instance(object):
             # first sentence of tail
             back = tail.split('.')[0]
         elif cls.training_instance_strategy == "window":
-            front = ' '.join(head.split(' ')[-5 :])
-            back = ' '.join(tail.split(' ')[0 : 5])
+            front_list = head.split()[-5 :]
+            back_list = tail.split()[0 : 5]
+            front = ' '.join(front_list)
+            back = ' '.join(back_list)
+
+            if len(front_list) < 5:
+                padding_front = ["PADDING"] * (5-len(front_list))
+                front = ' '.join(padding_front) + ' ' + front
+            if len(back_list) < 5:
+                padding_back = ["PADDING"] * (5-len(back_list))
+                back = back + ' ' + ' '.join(padding_back)
         else:
             raise ValueError("invalid training strategy : " + \
                               cls.training_instance_strategy)
@@ -165,7 +182,14 @@ class Instance(object):
         self.tail = ' '.join(tail.replace('\n','').split()).strip()
         self.label = label.replace('\n','').strip()
         self.head_pos_tags = head_pos_tags
+        if len(self.head_pos_tags) < 5:
+            padding_front = ["PADDING"] * (5-len(self.head_pos_tags))
+            self.head_pos_tags = padding_front + self.head_pos_tags
+
         self.tail_pos_tags = tail_pos_tags
+        if len(self.tail_pos_tags) < 5:
+            padding_back = ["PADDING"] * (5-len(self.tail_pos_tags))
+            self.tail_pos_tags =  self.tail_pos_tags + padding_back
 
 
     def __repr__(self):
@@ -177,6 +201,8 @@ class Instance(object):
         context_words = Instance._get_context(self.head, self.tail)
         context_indices = []
         
+        assert len(context_words.split()) == 10, "word is " + str(self.number) + " , " + str(context_words) + " : " + str(context_words.split())
+
         for i, word in enumerate(context_words.split()):
             try:
                 context_indices.append(WORD_TO_INDEX[word.lower()])
@@ -200,7 +226,7 @@ class Instance(object):
 
 def get_instances(xml_file, key_file):
     def should_be_omitted(num_instances):
-        return num_instances < 10
+        return num_instances < 20
 
 
     tree = ET.parse(xml_file)
@@ -216,7 +242,6 @@ def get_instances(xml_file, key_file):
     tails   = map(lambda x: x.find('.//head').tail or '', xml_instances)
 
     full_context = [(head + tail).split() for head, tail in izip(heads, tails)]
-
     pos_tags_of_full_context = nltk.pos_tag_sents(full_context)
 
     with open(key_file) as labels_file:
@@ -238,7 +263,6 @@ def get_instances(xml_file, key_file):
 
         instance = Instance(number, head, tail, head_pos_tags, tail_pos_tags, label)
 
-        #print instance
         csv_instances.append(instance)
 
     return csv_instances
@@ -255,7 +279,7 @@ def write_csv_for_directory(directory):
 
             for i, (xml_file, key_file) in enumerate(izip(xml_files, key_files)):
                 if i % 50 == 0:
-                    print "Iteration ", i 
+                    print multiprocessing.current_process(), "Iteration ", i 
                 instances = get_instances(xml_file, key_file)
                 
                 for instance in instances:
@@ -266,25 +290,30 @@ def write_csv_for_directory(directory):
         print 'completed', directory
     except Exception as e:
         logging.exception(e)
+        print multiprocessing.current_process()
         raise e
 
 
 def write_csv_for_files_in_directory(directory):
     try:
+        word_type = directory.split('/')[-1]
         xml_files = glob.glob(directory + '/*.xml')
         key_files = glob.glob(directory + '/*.key')
 
         for i, (xml_file, key_file) in enumerate(izip(xml_files, key_files)):
             if i % 50 == 0:
-                print "Iteration ", i 
+                print multiprocessing.current_process(), "Iteration ", i 
             
             file_name = xml_file.split('\\')[-1].split('/')[-1].split('.')[0]  # split on both \ and / in case of os differences
-                                                                                # i run on both linux and windows
+                                                                                # I ran this code on windows
             instances = get_instances(xml_file, key_file)
             if instances:
-                with open('./testfiles/' + file_name + '.csv', 'wb+')  as output_file:
+                with open('./testfiles/' + word_type + file_name + '.csv', 'wb+')  as output_file:
                     writer = csv.writer(output_file)
-                
+                    
+                    # write number of classes first
+                    writer.writerow([len(SENSE_TO_INDEX[get_root_word(instances[0].label)])])
+
                     for instance in instances:
                         writer.writerows([instance.get_context_list() + instance.get_pos_tags_list()])
                         writer.writerows([[SENSE_TO_INDEX[ get_root_word(instance.label)][instance.label] ]])
@@ -292,11 +321,17 @@ def write_csv_for_files_in_directory(directory):
         print 'completed', directory
     except Exception as e:
         logging.exception(e)
+        print multiprocessing.current_process()
         raise e
+
 
 if __name__ == '__main__':
     assert WORD_TO_INDEX # assert not empty
-    pool = Pool(5)
+    assert POS_TAGS
+    assert SENSE_TO_INDEX
+
+
+    pool = multiprocessing.Pool(processes=5)
     #for directory in config['directories_for_testing'] :
     #    write_csv_for_files_in_directory(directory)
     pool.map(write_csv_for_files_in_directory, config['directories_for_testing'])
