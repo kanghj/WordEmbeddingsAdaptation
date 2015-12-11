@@ -32,12 +32,14 @@ for f in paths.files("./testtxt/testfiles/") do
    -- print p to see got wad
    if not paths.dirp("./testtxt/testfiles/" .. f) then
 
-      inputFile = torch.DiskFile("testtxt/testfiles/" .. f, 'r')
+--      inputFile = torch.DiskFile("testtxt/testfiles/" .. f, 'r')
+      local inputFile = io.open("testtxt/testfiles/" .. f, 'r')
+
       inputLine = torch.LongStorage(20)
 
-      -- init new model
-      n_classes = inputFile:readInt()
+      n_classes = tonumber(inputFile:read('*line'))
 
+      -- init new model
       pt = nn.ParallelTable()
       pt:add(ltw)
       pt:add(ltw2)
@@ -66,22 +68,25 @@ for f in paths.files("./testtxt/testfiles/") do
       function dataset:size() return trainSize end
       trainSize = 0
       while true  do
-	 inputFile:readLong(inputLine)
+	 local instance_values = inputFile:read('*line')
+	 if not instance_values then break end
+--		 inputFile:readLong(inputLine)
+	 inputLine = instance_values:split(' ')
 	 trainSize = trainSize + 1
 	 local input = torch.Tensor(20)
 	 for j=1,10 do 
-	    input[j] = inputLine[j]
+	    input[j] = tonumber(inputLine[j])
 	 end
 	 for j=11,20 do 
-	    input[j] = inputLine[j] + 1
+	    input[j] = tonumber(inputLine[j]) + 1
 	 end
 
-	 local label = inputFile:readInt()
+	 local label = tonumber(inputFile:read('*line'))
 	 local newInput = nn.SplitTable(1):forward(nn.Reshape(2,10):forward(input))
 
 	 local labelTensor = torch.Tensor(1)
 	 labelTensor[1] = label
-	 dataset[i] = {newInput, labelTensor}
+	 dataset[trainSize] = {newInput, labelTensor}
       end
 
       inputFile:close()
@@ -91,18 +96,21 @@ for f in paths.files("./testtxt/testfiles/") do
       trainer.learningRate = 0.01
       trainer:train(dataset)
       
-      print('done with ' .. f)
+      print('done with ' .. f .. ', training size is ' .. trainSize)
 
    end
 end
 
-local outputEmbeddingsFile = torch.DiskFile('new_embeddings.txt', 'w')
+--outputEmbeddingsFile = torch.DiskFile('new_embeddings.txt', 'w')
+outputEmbeddingsFile = io.open('new_embeddings.txt', 'w+')
+--io.output(outputEmbeddingsFile)
 for i=1, (#ltw.weight)[1] do
---   for j=1, (#ltw.weight)[0] do
-      outputEmbeddingsFile:writeDouble(ltw.weight[i])
-        	
---   end    
+    for j=1, (#ltw.weight[i])[1] do
+        outputEmbeddingsFile:write(ltw.weight[i][j], ' ')
+    end
+    outputEmbeddingsFile:write('\n')
 end
+outputEmbeddingsFile:close(outputEmbeddingsFile)
 
 
 -- Testing
