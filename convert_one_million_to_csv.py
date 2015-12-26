@@ -21,8 +21,9 @@ The first row is number of senses/classes
 for the target word. 
 
 After this, run drop_commas.py. Loading csv files in torch is a pain as of this current date, 
-although there is progress getting made by torch in loading csv (the csvigo library), so in future, 
-drop_commas may not be required.
+although there is progress getting made by torch in loading csv 
+(the csvigo library (which has rtouble loading large files now?)),
+so in future, drop_commas may not be required.
 
 """
 
@@ -226,7 +227,7 @@ class Instance(object):
 
 def get_instances(xml_file, key_file):
     def should_be_omitted(num_instances):
-        return num_instances < 20
+        return num_instances < 5
 
 
     tree = ET.parse(xml_file)
@@ -247,7 +248,7 @@ def get_instances(xml_file, key_file):
     with open(key_file) as labels_file:
         labels = [line.split(' ')[2] for line in labels_file]
         # labels is now the sense in wordnet, in the senseval format
-        # but we should convert it into a numbered format, based on a key file
+        # but we should convert it into a numbered format, based on a key file (use SENSE_TO_INDEX)
     
     csv_instances = []
     for number, head, tail, label, pos_tags in izip(ids, heads, tails, labels, pos_tags_of_full_context):

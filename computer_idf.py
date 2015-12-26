@@ -39,6 +39,11 @@ def _load_wordlist():
 WORDLIST = []
 _load_wordlist()
 
+def process_intermediate_results(result):
+    """
+    Intermedaite processing, for senna, should convert all 4-digits numbers to ####, any numerical value to #,
+    
+    """
 
 def get_words_and_frequency(document):
     with open(document) as opened_document:
