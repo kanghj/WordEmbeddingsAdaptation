@@ -29,8 +29,8 @@ testSize = 5
 -- create training data set
 for f in paths.files("./testtxt/testfiles/") do
 
-   -- print p to see got wad
-   if not paths.dirp("./testtxt/testfiles/" .. f) then
+   
+    if not paths.dirp("./testtxt/testfiles/" .. f) then
 
 --      inputFile = torch.DiskFile("testtxt/testfiles/" .. f, 'r')
       local inputFile = io.open("testtxt/testfiles/" .. f, 'r')
@@ -68,25 +68,25 @@ for f in paths.files("./testtxt/testfiles/") do
       function dataset:size() return trainSize end
       trainSize = 0
       while true  do
-	 local instance_values = inputFile:read('*line')
-	 if not instance_values then break end
---		 inputFile:readLong(inputLine)
-	 inputLine = instance_values:split(' ')
-	 trainSize = trainSize + 1
-	 local input = torch.Tensor(20)
-	 for j=1,10 do 
-	    input[j] = tonumber(inputLine[j])
-	 end
-	 for j=11,20 do 
-	    input[j] = tonumber(inputLine[j]) + 1
-	 end
+        local instance_values = inputFile:read('*line')
+        if not instance_values then break end
+--       inputFile:readLong(inputLine)
+        inputLine = instance_values:split(' ')
+        trainSize = trainSize + 1
+        local input = torch.Tensor(20)
+        for j=1,10 do 
+          input[j] = tonumber(inputLine[j])
+        end
+        for j=11,20 do 
+          input[j] = tonumber(inputLine[j]) + 1
+        end
 
-	 local label = tonumber(inputFile:read('*line'))
-	 local newInput = nn.SplitTable(1):forward(nn.Reshape(2,10):forward(input))
+        local label = tonumber(inputFile:read('*line'))
+        local newInput = nn.SplitTable(1):forward(nn.Reshape(2,10):forward(input))
 
-	 local labelTensor = torch.Tensor(1)
-	 labelTensor[1] = label
-	 dataset[trainSize] = {newInput, labelTensor}
+        local labelTensor = torch.Tensor(1)
+        labelTensor[1] = label
+        dataset[trainSize] = {newInput, labelTensor}
       end
 
       inputFile:close()
@@ -97,6 +97,8 @@ for f in paths.files("./testtxt/testfiles/") do
       trainer:train(dataset)
       
       print('done with ' .. f .. ', training size is ' .. trainSize)
+
+      torch.save(f .. '.model', mlp)
 
    end
 end
@@ -138,8 +140,8 @@ for i=1,testSize do
    for k=1, output:size()[1] do
       --print(k .. ', '  .. output[k])
       if output[k] > outputValue then
-	     outputLabel = k;
-	     outputValue = output[k];
+         outputLabel = k;
+         outputValue = output[k];
       end
    end
 

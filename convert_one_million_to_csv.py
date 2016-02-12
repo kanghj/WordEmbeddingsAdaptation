@@ -16,6 +16,8 @@ This ran on windows. The present program creates a .csv file for every target wo
 to make a csv file for the entire word pos type (adj, adv, noun, verb) by replacing instances of 
 write_csv_for_files_in_directory to write_csv_for_directory. 
 
+NLTK is used to produce the part-of-speech (POS) tags. 
+
 (for a csvfile for each target word) Although we are writing a csv file, we don't use any csv headers. 
 The first row is number of senses/classes 
 for the target word. 
@@ -27,11 +29,19 @@ so in future, drop_commas may not be required.
 
 """
 
+
 config = {
+        # convert one million
+        #'directories_for_testing' : ['C:/Users/user/Downloads/one-million-sense-tagged-instances-wn30.tar/one-million-sense-tagged-instances-wn30/noun', 
+        #                              'C:/Users/user/Downloads/one-million-sense-tagged-instances-wn30.tar/one-million-sense-tagged-instances-wn30/verb',
+        #                              'C:/Users/user/Downloads/one-million-sense-tagged-instances-wn30.tar/one-million-sense-tagged-instances-wn30/adv',
+        #                              'C:/Users/user/Downloads/one-million-sense-tagged-instances-wn30.tar/one-million-sense-tagged-instances-wn30/adj'],
         'directories_for_testing' : ['C:/Users/user/Downloads/one-million-sense-tagged-instances-wn30.tar/one-million-sense-tagged-instances-wn30/noun', 
                                       'C:/Users/user/Downloads/one-million-sense-tagged-instances-wn30.tar/one-million-sense-tagged-instances-wn30/verb',
                                       'C:/Users/user/Downloads/one-million-sense-tagged-instances-wn30.tar/one-million-sense-tagged-instances-wn30/adv',
                                       'C:/Users/user/Downloads/one-million-sense-tagged-instances-wn30.tar/one-million-sense-tagged-instances-wn30/adj'],
+
+
         'wordlst' : 'C:/Users/user/fyp/ims_0.9.2/senna/hash/words.lst',
         }
 
@@ -202,7 +212,7 @@ class Instance(object):
         context_words = Instance._get_context(self.head, self.tail)
         context_indices = []
         
-        assert len(context_words.split()) == 10, "word is " + str(self.number) + " , " + str(context_words) + " : " + str(context_words.split())
+        assert len(context_words.split()) == 10, "context length wrong? word is " + str(self.number) + " , " + str(context_words) + " : " + str(context_words.split())
 
         for i, word in enumerate(context_words.split()):
             try:
@@ -305,8 +315,9 @@ def write_csv_for_files_in_directory(directory):
             if i % 50 == 0:
                 print multiprocessing.current_process(), "Iteration ", i 
             
-            file_name = xml_file.split('\\')[-1].split('/')[-1].split('.')[0]  # split on both \ and / in case of os differences
-                                                                                # I ran this code on windows
+            file_name = xml_file.split('\\')[-1].split('/')[-1].split('.')[0]  # split on both \ and / in case of os differences (may not matter)
+                                                                                # this is done in order to fix some strange bug
+                                                                                # note: I ran this code on windows, unix is untested
             instances = get_instances(xml_file, key_file)
             if instances:
                 with open('./testfiles/' + word_type + file_name + '.csv', 'wb+')  as output_file:
