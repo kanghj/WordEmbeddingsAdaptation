@@ -2,18 +2,18 @@ require 'torch'
 require 'nn'
 require 'paths'
 
--- embeddings from senna (c&w)
+-- embeddings
 -- 1 for the context's word embeddings
 -- 1 for pos tags
-ltw = nn.LookupTable(130000, 50)
+ltw = nn.LookupTable(218318, 50)
 ltw2 = nn.LookupTable(46, 46)
 
 -- initialize lookup table with embeddings
 embeddingsFile = torch.DiskFile('embeddings.txt');
 embedding = torch.DoubleStorage(50)
 
--- todo : change hardcoded values like 130000
-for i=1, 130000 do 
+-- todo : change hardcoded values like 218318
+for i=1, 218318 do 
    embeddingsFile:readDouble(embedding);
    local emb = torch.Tensor(50)
    for j=1,50 do 
@@ -41,16 +41,15 @@ for f in paths.files("./testtxt/testfiles/") do
 
       -- init new model
       pt = nn.ParallelTable()
-      pt:add(ltw)
-      pt:add(ltw2)
+      pt:add(ltw)  -- 10 x 50
+      pt:add(ltw2)  -- 10 x 46
 
       --- todo: add capitalization feature
       mlp = nn.Sequential()
       mlp:add(pt)
-      --mlp:add(ltw)
-
+ 
       -- the NN layers
-      jt = nn.JoinTable(2)
+      jt = nn.JoinTable(2)  -- 10 x 96
       bef_dropout_reshape = nn.Reshape(960)
       dropout = nn.Dropout(0.5)
       reshape = nn.Reshape(960)

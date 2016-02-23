@@ -42,7 +42,7 @@ config = {
                                       'C:/Users/user/Downloads/one-million-sense-tagged-instances-wn30.tar/one-million-sense-tagged-instances-wn30/adj'],
 
 
-        'wordlst' : 'C:/Users/user/fyp/ims_0.9.2/senna/hash/words.lst',
+        'wordlst' : 'C:/Users/user/Documents/fyp_embeddings/word2vec2/words.lst',
         }
 
 ENCODING = "iso-8859-1"
@@ -65,6 +65,8 @@ def construct_word_to_index(wordlst_file):
     for i, word in enumerate(wordlst_file):
         WORD_TO_INDEX[word.strip()] = i + 1 # + 1 to be 1-indexed, this is convenient for later use 
                                             # because the lua torch library is 1-indexed
+    if 'UNKNOWN' not in WORD_TO_INDEX:
+        WORD_TO_INDEX['UNKNOWN'] = len(WORD_TO_INDEX) 
 
 with open(config['wordlst']) as wordlst_file:
     print "gathering WORD_TO_INDEX mapping"
@@ -306,6 +308,9 @@ def write_csv_for_directory(directory):
 
 
 def write_csv_for_files_in_directory(directory):
+    """
+    Writes to csv file in directory './testfiles/' + word_type + file_name + '.csv'
+    """
     try:
         word_type = directory.split('/')[-1]
         xml_files = glob.glob(directory + '/*.xml')
