@@ -11,7 +11,7 @@ import sys,string, numpy
 for l in sys.stdin:
 	d = string.split(l)
 	#words.append(d[0])
-	values.append([float(x) for x in d[1:]])
+	values.append([float(x) for x in d[0:]])
 
 values = numpy.array(values)
 values /= numpy.std(values)
